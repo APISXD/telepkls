@@ -1,7 +1,6 @@
 import locale
 from datetime import datetime
 from telegram import ParseMode
-
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
 import logging
 
@@ -10,13 +9,14 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Define conversation states
-CHOOSING, AREA_CHOICE, CIRCLE_RADIUS, TRIANGLE_BASE, TRIANGLE_HEIGHT, SQUARE_LENGTH, SQUARE_WIDTH, PARALLELOGRAM_BASE, PARALLELOGRAM_HEIGHT, SALARY_NAME, SALARY_AMOUNT, SALARY_ATTENDANCE = range(12)
+CHOOSING, AREA_CHOICE, CIRCLE_RADIUS, TRIANGLE_BASE, TRIANGLE_HEIGHT, SQUARE_LENGTH, SQUARE_WIDTH, PARALLELOGRAM_BASE, PARALLELOGRAM_HEIGHT, SALARY_NAME, SALARY_AMOUNT, SALARY_ATTENDANCE, TIME_DIFFERENCE_START, TIME_DIFFERENCE_END = range(14)
 
 # Start command
 def start(update, context):
     update.message.reply_text("Halo! Saya adalah bot kalkulator. Silakan pilih opsi:\n"
                               "1. Menghitung Luas\n"
-                              "2. Menghitung gaji bulanan")
+                              "2. Menghitung gaji bulanan\n"
+                              "3. Menghitung selisih waktu antara dua tanggal")
     return CHOOSING
 
 # Choose option
@@ -35,8 +35,11 @@ def choose_option(update, context):
                                   "2. Gaji\n"
                                   "3. Jumlah Kehadiran")
         return SALARY_NAME
+    elif text == '3':
+        update.message.reply_text("Masukkan tanggal mulai (YYYY-MM-DD):")
+        return TIME_DIFFERENCE_START
     else:
-        update.message.reply_text("Input tidak valid. Silakan pilih opsi 1 atau 2.")
+        update.message.reply_text("Input tidak valid. Silakan pilih opsi 1, 2, atau 3.")
         return CHOOSING
 
 # Handle area calculation
@@ -165,10 +168,36 @@ def handle_salary_attendance(update, context):
     update.message.reply_text(f"Total gaji bulanan untuk {context.user_data['name']} adalah: {formatted_salary}")
     return CHOOSING
 
-import locale
+# Handle time difference calculation
+def time_difference(start_date, end_date):
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    delta = end_date - start_date
+    
+    months = delta.days // 30
+    lebih = delta.days % 30
+    days = delta.days
+    
+    return months, lebih, days
+
+def handle_time_difference_start(update, context):
+    text = update.message.text
+    context.user_data['start_date'] = text
+    update.message.reply_text("Masukkan tanggal akhir (YYYY-MM-DD):")
+    return TIME_DIFFERENCE_END
+
+def handle_time_difference_end(update, context):
+    start_date = context.user_data['start_date']
+    end_date = update.message.text
+    months, lebih, days = time_difference(start_date, end_date)
+    update.message.reply_text(f"Selisih waktu antara {start_date} dan {end_date} adalah:")
+    update.message.reply_text(f"{months} Bulan Lebih {lebih} hari")
+    update.message.reply_text(f"Total Hari: {days}")
+    return CHOOSING
 
 # Set locale
-locale.setlocale(locale.LC_ALL, 'id_ID')  # Sesuaikan dengan kode bahasa dan wilayah Anda
+locale.setlocale(locale.LC_ALL, 'id_ID')
 
 # Handle /count command
 def count(update, context):
@@ -180,7 +209,7 @@ def count(update, context):
 def sekejul(update, context):
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
-    update.message.reply_text(f"Waktu sekarang adalah: {current_time} dan Kereta disini https://commuterline.id/perjalanan-krl/jadwal-kereta")
+    update.message.reply_text(f"Waktu sekarang adalah: {current_time} dan Kereta disini commuterline.id/perjalanan-krl/jadwal-kereta dan Tarif disini tarifkereta.vercel.app")
 
 # Cancel function
 def cancel(update, context):
@@ -206,7 +235,7 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            CHOOSING: [MessageHandler(Filters.regex(r'^[12]$'), choose_option)],
+            CHOOSING: [MessageHandler(Filters.regex(r'^[123]$'), choose_option)],
             AREA_CHOICE: [MessageHandler(Filters.regex(r'^[1-4]$'), handle_area_calculation)],
             CIRCLE_RADIUS: [MessageHandler(Filters.text & ~Filters.command, handle_circle_radius)],
             TRIANGLE_BASE: [MessageHandler(Filters.text & ~Filters.command, handle_triangle_base)],
@@ -217,7 +246,9 @@ def main():
             PARALLELOGRAM_HEIGHT: [MessageHandler(Filters.text & ~Filters.command, handle_parallelogram_height)],
             SALARY_NAME: [MessageHandler(Filters.text & ~Filters.command, handle_salary_name)],
             SALARY_AMOUNT: [MessageHandler(Filters.text & ~Filters.command, handle_salary_amount)],
-            SALARY_ATTENDANCE: [MessageHandler(Filters.text & ~Filters.command, handle_salary_attendance)]
+            SALARY_ATTENDANCE: [MessageHandler(Filters.text & ~Filters.command, handle_salary_attendance)],
+            TIME_DIFFERENCE_START: [MessageHandler(Filters.text & ~Filters.command, handle_time_difference_start)],
+            TIME_DIFFERENCE_END: [MessageHandler(Filters.text & ~Filters.command, handle_time_difference_end)]
         },
         fallbacks=[MessageHandler(Filters.regex(r'^cancel$'), cancel)]
     )
